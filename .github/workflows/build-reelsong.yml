@@ -16,46 +16,68 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Install Java 17
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3. Set up Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
+      # 4. Install Android SDK, NDK and CMake
       - name: Install SDK, NDK and CMake
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
 
+      # 5. Set up Gradle
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
+      # 6. Extract Android project
       - name: Extract project
         run: |
           unzip -o ReelSongAI-GitHub-Actions-Ready.zip -d extracted
           test -f extracted/ReelSongAI/app/build.gradle.kts
 
+      # 7. Configure AcoustID API key
       - name: Configure AcoustID
         env:
           ACOUSTID_APP_KEY: ${{ secrets.ACOUSTID_APP_KEY }}
         run: |
-          test -n "$ACOUSTID_APP_KEY"
-          printf 'ACOUSTID_APP_KEY=%s\n' "$ACOUSTID_APP_KEY" > extracted/ReelSongAI/local.properties
+          if [ -z "$ACOUSTID_APP_KEY" ]; then
+            echo "ERROR: ACOUSTID_APP_KEY secret is missing"
+            exit 1
+          fi
 
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > extracted/ReelSongAI/local.properties
+          printf 'ACOUSTID_APP_KEY=%s\n' "$ACOUSTID_APP_KEY" >> extracted/ReelSongAI/local.properties
+
+      # 8. Build debug APK
       - name: Build APK
         working-directory: extracted/ReelSongAI
-        run: gradle --no-daemon :app:assembleDebug
+        run: |
+          gradle --no-daemon :app:assembleDebug
 
+      # 9. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ReelSong-AI-debug-APK
           path: extracted/ReelSongAI/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
