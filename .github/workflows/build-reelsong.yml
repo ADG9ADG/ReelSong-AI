@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - 'ReelSongAI-GitHub-Actions-Ready.zip'
+      - '.github/workflows/build-reelsong.yml'
 
 permissions:
   contents: read
@@ -24,24 +25,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK, NDK and CMake
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Extract project ZIP
+      - name: Extract project
         run: |
           unzip -o ReelSongAI-GitHub-Actions-Ready.zip -d extracted
           test -f extracted/ReelSongAI/app/build.gradle.kts
+
+      - name: Configure AcoustID
+        env:
+          ACOUSTID_APP_KEY: ${{ secrets.ACOUSTID_APP_KEY }}
+        run: |
+          test -n "$ACOUSTID_APP_KEY"
+          printf 'ACOUSTID_APP_KEY=%s\n' "$ACOUSTID_APP_KEY" > extracted/ReelSongAI/local.properties
 
       - name: Build APK
         working-directory: extracted/ReelSongAI
